@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOCÊ NÃO ESTÁ SOZINHO - Terror Psicológico</title>
+  <meta name="description" content="Um jogo de terror psicológico em primeira pessoa criado em Vanilla JavaScript, HTML5 Canvas e Web Audio API. Explore uma casa abandonada enquanto uma presença misteriosa observa seus passos.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Special+Elite&family=VT323&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Container Principal do Jogo -->
+  <div id="game-container">
+    <!-- Canvas de Renderização 3D (WebGL) -->
+    <canvas id="render-canvas"></canvas>
+
+    <!-- Canvas de Efeitos Visuais & Pós-Processamento (VHS, Granulação, Aberração Cromática) -->
+    <canvas id="fx-canvas"></canvas>
+
+    <!-- Camada de Vinheta e Estática CSS -->
+    <div id="vignette-overlay"></div>
+    <div id="noise-overlay"></div>
+    <div id="glitch-flash"></div>
+    <div id="sanity-pulse"></div>
+
+    <!-- HUD Minimalista do Jogador -->
+    <div id="hud">
+      <!-- Mensagem discreta quando o Pointer Lock é perdido -->
+      <div id="pointer-lock-prompt" class="hidden">
+        <span class="lock-icon">&#9678;</span> Clique na tela para continuar
+      </div>
+
+      <!-- Retículo Central / Crosshair -->
+      <div id="crosshair">
+        <div class="crosshair-dot"></div>
+      </div>
+
+      <!-- Notificação de Interação Contextual -->
+      <div id="interaction-prompt">
+        <span class="key-badge">E</span>
+        <span id="interaction-text">Interagir</span>
+      </div>
+
+      <!-- Indicador de Esconderijo -->
+      <div id="hiding-indicator" class="hidden">
+        <span class="eye-icon">&#128065;</span> ESCONDIDO &bull; Pressione [E] para sair
+      </div>
+
+      <!-- Indicador de Bateria da Lanterna -->
+      <div id="flashlight-hud" class="hidden">
+        <div class="battery-label">LANTERNA [F]</div>
+        <div class="battery-shell">
+          <div class="battery-level" id="battery-level-bar" style="width: 100%;"></div>
+          <div class="battery-tip"></div>
+        </div>
+        <div class="battery-percent" id="battery-percent-text">100%</div>
+      </div>
+
+      <!-- Barra de Estamina Discreta -->
+      <div id="stamina-hud">
+        <div id="stamina-bar" style="width: 100%;"></div>
+      </div>
+
+      <!-- Objetivo Atual -->
+      <div id="objective-container">
+        <div class="objective-header">OBJETIVO</div>
+        <div id="objective-text">Encontrar uma fonte de luz</div>
+      </div>
+
+      <!-- Mensagens e Legendas / Pensamentos do Personagem -->
+      <div id="subtitles"></div>
+
+      <!-- Notificações Flutuantes (Item Coletado, etc) -->
+      <div id="toast-container"></div>
+    </div>
+
+    <!-- Visualizador de Documentos / Fotografias -->
+    <div id="document-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="document-content">
+        <button id="doc-close-btn" class="close-btn" title="Fechar (ESC)">&times;</button>
+        <div class="document-paper">
+          <div class="document-header">
+            <span class="document-date" id="doc-date"></span>
+            <span class="document-stamp">REGISTRO</span>
+          </div>
+          <div class="document-body" id="doc-text"></div>
+          <div class="document-footer">Pressione [ESC] ou [E] para fechar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de Inventário [TAB / I] -->
+    <div id="inventory-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="inventory-window">
+        <div class="inventory-header">
+          <h2>INVENTÁRIO &bull; ITENS & DOCUMENTOS</h2>
+          <button id="inv-close-btn" class="close-btn">&times;</button>
+        </div>
+        <div class="inventory-layout">
+          <div class="inventory-slots" id="inventory-slots-container">
+            <!-- Gerado via JavaScript -->
+          </div>
+          <div class="inventory-details" id="inventory-item-details">
+            <h3 id="inv-detail-title">Selecione um item</h3>
+            <p id="inv-detail-desc">Passe o mouse ou selecione um item para examinar suas características.</p>
+            <div id="inv-detail-actions"></div>
+          </div>
+        </div>
+        <div class="inventory-footer">
+          <span>[TAB] ou [ESC] para fechar</span> &bull; <span>[F] Alternar Lanterna</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu de Pausa [ESC] -->
+    <div id="pause-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="menu-box">
+        <h2 class="menu-title glitch-text" data-text="JOGO PAUSADO">JOGO PAUSADO</h2>
+        <div class="menu-buttons">
+          <button id="btn-resume" class="menu-btn primary-btn">CONTINUAR</button>
+          <button id="btn-save-game" class="menu-btn">SALVAR PROGRESSO</button>
+          <button id="btn-settings-pause" class="menu-btn">CONFIGURAÇÕES</button>
+          <button id="btn-quit-to-menu" class="menu-btn danger-btn">MENU PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Configurações -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="menu-box settings-box">
+        <h2 class="menu-title">CONFIGURAÇÕES</h2>
+        <div class="setting-item">
+          <label for="setting-volume">Volume Geral: <span id="vol-display">80%</span></label>
+          <input type="range" id="setting-volume" min="0" max="100" value="80">
+        </div>
+        <div class="setting-item">
+          <label for="setting-mouse-sens">Sensibilidade do Mouse: <span id="sens-display">1.5</span></label>
+          <input type="range" id="setting-mouse-sens" min="0.5" max="3.5" step="0.1" value="1.5">
+        </div>
+        <div class="setting-item">
+          <label for="setting-vhs">Efeitos VHS & Aberração:</label>
+          <input type="checkbox" id="setting-vhs" checked>
+        </div>
+        <div class="setting-item">
+          <label for="setting-invert-y">Inverter Eixo Y:</label>
+          <input type="checkbox" id="setting-invert-y">
+        </div>
+        <button id="btn-close-settings" class="menu-btn primary-btn">VOLTAR</button>
+      </div>
+    </div>
+
+    <!-- Tela de Game Over / Capturado pelo Observador -->
+    <div id="game-over-modal" class="modal hidden">
+      <div class="modal-backdrop dark-blood"></div>
+      <div class="game-over-content">
+        <h1 class="death-title glitch-text" data-text="VOCÊ NUNCA ESTEVE SOZINHO">VOCÊ NUNCA ESTEVE SOZINHO</h1>
+        <p class="death-quote">"A escuridão da casa finalmente o consumiu. Sua respiração parou para sempre."</p>
+        <div class="menu-buttons">
+          <button id="btn-restart-death" class="menu-btn primary-btn">REINICIAR DO ÚLTIMO SALVAMENTO</button>
+          <button id="btn-menu-death" class="menu-btn">MENU PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tela de Conclusão do Capítulo 1 / Vitória -->
+    <div id="victory-modal" class="modal hidden">
+      <div class="modal-backdrop dark-fog"></div>
+      <div class="victory-content">
+        <h1 class="victory-title glitch-text" data-text="VOCÊ ESCAPOU... POR ENQUANTO">VOCÊ ESCAPOU... POR ENQUANTO</h1>
+        <div class="victory-story">
+          <p>Você destrancou a pesada porta da frente e correu cambaleando pela névoa fria da madrugada.</p>
+          <p>O ar gelado queimava seus pulmões enquanto as árvores retorcidas da floresta passavam como vultos.</p>
+          <p>Mas quando você parou para respirar, no silêncio da estrada escura...</p>
+          <p class="chilling-line">Você ouviu passos suaves nas folhas secas bem atrás de você.</p>
+        </div>
+        <h2 class="sub-chapter">FIM DO CAPÍTULO 1</h2>
+        <div class="menu-buttons">
+          <button id="btn-victory-menu" class="menu-btn primary-btn">MENU PRINCIPAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu Principal -->
+    <div id="main-menu" class="fullscreen-menu">
+      <div class="menu-vignette"></div>
+      <div class="menu-fog"></div>
+      
+      <div class="menu-center">
+        <div class="menu-header">
+          <p class="menu-tagline">UMA EXPERIÊNCIA DE TERROR PSICOLÓGICO</p>
+          <h1 class="main-title glitch-text" data-text="VOCÊ NÃO ESTÁ SOZINHO">VOCÊ NÃO ESTÁ SOZINHO</h1>
+          <div class="title-subline"></div>
+        </div>
+
+        <div class="menu-buttons main-nav">
+          <button id="btn-new-game" class="menu-btn main-action-btn">
+            <span class="btn-indicator">&gt;</span> NOVO JOGO
+          </button>
+          <button id="btn-continue" class="menu-btn main-action-btn" disabled>
+            <span class="btn-indicator">&gt;</span> CONTINUAR
+          </button>
+          <button id="btn-settings-main" class="menu-btn">
+            <span class="btn-indicator">&gt;</span> CONFIGURAÇÕES
+          </button>
+          <button id="btn-controls" class="menu-btn">
+            <span class="btn-indicator">&gt;</span> CONTROLES & GUIA
+          </button>
+        </div>
+
+        <div class="menu-footer">
+          <span>Desenvolvido exclusivamente com HTML5 &bull; CSS3 &bull; Vanilla JavaScript &bull; WebGL &bull; Web Audio API</span>
+          <p class="audio-notice">&#127911; Recomenda-se o uso de fones de ouvido para imersão espacial.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Controles & Instruções -->
+    <div id="controls-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="menu-box controls-box">
+        <h2 class="menu-title">CONTROLES & MECÂNICAS</h2>
+        <div class="controls-grid">
+          <div class="control-row"><span class="k-badge">W, A, S, D</span> <span>Mover-se</span></div>
+          <div class="control-row"><span class="k-badge">Mouse</span> <span>Olhar ao redor (Captura de cursor)</span></div>
+          <div class="control-row"><span class="k-badge">E</span> <span>Interagir com portas, itens e objetos</span></div>
+          <div class="control-row"><span class="k-badge">F / Botão Dir.</span> <span>Ligar / Desligar Lanterna</span></div>
+          <div class="control-row"><span class="k-badge">Shift</span> <span>Correr (Faz barulho e atrai O Observador!)</span></div>
+          <div class="control-row"><span class="k-badge">Ctrl / C</span> <span>Agachar (Passos silenciosos)</span></div>
+          <div class="control-row"><span class="k-badge">TAB / I</span> <span>Abrir / Fechar Inventário</span></div>
+          <div class="control-row"><span class="k-badge">ESC</span> <span>Pausar / Fechar Menus</span></div>
+        </div>
+        <div class="gameplay-tips">
+          <p><strong>Atenção:</strong> Você é totalmente vulnerável. Não há armas.</p>
+          <p>Seja cauteloso ao correr; O Observador escuta seus passos. Utilize armários e banheiras para se esconder quando sentir a presença dele.</p>
+        </div>
+        <button id="btn-close-controls" class="menu-btn primary-btn">ENTENDIDO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts Modulares em Vanilla JavaScript -->
+  <script src="js/save.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/story.js"></script>
+  <script src="js/inventory.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/entity.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/interaction.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
